@@ -1,0 +1,43 @@
+name: Java SpringBoot CI/CD to Azure VM
+
+on:
+  push:
+    branches: [ "main" ]  # or your working branch name
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v3
+
+    - name: Set up Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: '17'   # your java version
+        distribution: 'temurin'
+
+    - name: Build Project
+      run: mvn clean package -DskipTests
+
+    - name: Copy jar to Azure VM
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USER }}
+        password: ${{ secrets.VM_PASSWORD }}
+        port: 22
+        source: "target/*.jar"
+        target: "/home/${{ secrets.VM_USER }}/deployments"
+
+    - name: SSH into VM and restart app
+      uses: appleboy/ssh-action@v0.1.7
+      with:
+        host: ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USER }}
+        password: ${{ secrets.VM_PASSWORD }}
+        port: 22
+        script: |
+          pkill -f '.jar' || true
+          nohup java -jar /home/${{ secrets.VM_USER }}/deployments/*.jar --server.port=8080 --server.address=0.0.0.0 &
